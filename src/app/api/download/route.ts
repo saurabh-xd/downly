@@ -1,40 +1,45 @@
-export const runtime = "nodejs"; 
+export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from 'next/server';
-import ytdl from '@distube/ytdl-core'
+import ytdl from '@distube/ytdl-core';
 
-export async function POST(request: NextRequest){
-      
-    try {
-      const {url} = await request.json();
-  
-      if(!url || !ytdl.validateURL(url)){
-          return NextResponse.json({ error: "Invalid YouTube URL" }, { status: 400 });
-      }
-  
-  
-      const info = await ytdl.getInfo(url);
-      const formats = info.formats
-        .filter((f) => f.mimeType && f.qualityLabel)
-        .map((f) => ({
-          quality: f.qualityLabel,
-          type: f.mimeType?.split(";")[0],
-          url: f.url,
-        }));
+const agent = ytdl.createAgent();
 
-        const thumbnails = info.videoDetails.thumbnails;
-const thumbnailUrl = thumbnails?.[thumbnails.length - 1]?.url ?? "";
-  
-      return NextResponse.json({
-        title: info.videoDetails.title,
-        thumbnail: thumbnailUrl,
-        formats,
-      });
-    } 
-     catch (error) {
+export async function POST(request: NextRequest) {
+  try {
+    const { url, itag } = await request.json();
 
-       console.error(error);
-    return Response.json({ error: "Failed to process video" }, { status: 500 });
-      
+    if (!url || !ytdl.validateURL(url)) {
+      return NextResponse.json(
+        { error: "Invalid YouTube URL" }, 
+        { status: 400 }
+      );
     }
+
+    const info = await ytdl.getInfo(url, { agent });
+    const format = itag 
+      ? info.formats.find(f => f.itag.toString() === itag)
+      : ytdl.chooseFormat(info.formats, { quality: 'highest' });
+
+    if (!format || !format.url) {
+      return NextResponse.json(
+        { error: "Format not found" }, 
+        { status: 404 }
+      );
+    }
+
+    const fileName = `${info.videoDetails.title.replace(/[^a-z0-9]/gi, '_')}.mp4`;
+
+    return NextResponse.json({
+      downloadUrl: format.url,
+      fileName: fileName
+    });
+
+  } catch (error: any) {
+    console.error('Download error:', error.message);
+    return NextResponse.json(
+      { error: "Failed to get download link" }, 
+      { status: 500 }
+    );
+  }
 }
