@@ -1,0 +1,35 @@
+import bcrypt from "bcryptjs";
+import { prisma } from "../../../../../lib/prisma";
+
+
+export async function POST(req: Request){
+
+const { email, password} = await req.json();
+
+ const user = await prisma.user.findUnique({
+    where: { email },
+  });
+
+    if (!user) {
+    return Response.json(
+      { error: "Invalid credentials" },
+      { status: 401 }
+    );
+  }
+
+  const isValid = await bcrypt.compare(password, user.password);
+
+  if (!isValid) {
+    return Response.json(
+      { error: "Invalid credentials" },
+      { status: 401 }
+    );
+  }
+
+    return Response.json({
+    message: "Signin successful",
+    userId: user.id,
+  });
+
+
+}
